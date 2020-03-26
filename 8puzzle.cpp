@@ -20,18 +20,21 @@ using namespace std;
 #define DOWN 1
 #define RIGHT 2
 #define LEFT 3
-#define DEBUG_INIT "1 3 4\n8 6 2\n_ 7 5"
+#define DEBUG_INIT "1 3 4\n8 6 2\n_ 7 5\n"
 #define DEBUG_GOAL "1 2 3\n8 _ 4\n7 6 5\n"
 
 // Globals
 
-int debug = 1;
+int debug = 0;
+int debug_m = 0;
+int num_nodes_explored = 0;
+bool found = false;
 vector<int> curr_puzzle;
 vector<int> goal_puzzle;
 vector<string> database;
 
 // Functions
-int MisplacedTiles(int f, int num_moves, int last_direction);
+int MisplacedTiles(int num_moves, int last_direction);
 int ManhattanDistance();
 
 vector<int> process_input(string type);
@@ -41,10 +44,12 @@ void swap(vector<int> &puzzle,int first, int second);
 bool check_legal_move(int direction);
 vector<int> expand_node(int direction);
 int find_blank();
-int mindex(int f[], int size);
+void mindex(int f[],bool min_f[], int size);
 void print_choice(int direction);
-void store_puzzle(vector<int> &puzzle);
+void store_puzzle(vector<int> puzzle);
 bool check_db(vector<int> possible_puzzle);
+
+void print_min_f(bool* minf);
 
 // MAIN
 int main()
@@ -62,23 +67,32 @@ int main()
     switch(heur)
     {
         case 'a':
-            int num_misplaced = compare_puzzles(curr_puzzle);
-            if(debug)
-                cout << "DEBUG: There are " << num_misplaced << " tiles misplaced."<<endl;
-            int status = MisplacedTiles(num_misplaced, 0, -1);
-            if(status == -1) cout << "Encountered a problem... exiting"<<endl;
+            {
+                int num_misplaced = compare_puzzles(curr_puzzle);
+                if(debug) cout << "DEBUG: There are " << num_misplaced << " tiles misplaced."<<endl;
+                int status = MisplacedTiles(0, -1);
+            }
             break;
+        case 'b':
+            {
+                ManhattanDistance();
+            }
+            break;
+        default:
+            cout << "That is not a valid command, goodbye."<<endl;
     }
     return 0;
 }
 
-int MisplacedTiles(int f, int num_moves, int last_direction)
+// Solve by using misplaced tiles heuristic
+int MisplacedTiles(int num_moves, int last_direction)
 {
-    bool problem = true;
+    if(debug) cout << "\tMove #" << num_moves<<endl;
     if(compare_puzzles(curr_puzzle) == 0)
     {
         cout << "\nGiven the selected heuristic, the solution required " << num_moves << " moves."<<endl;
-        // number of nodes?
+        cout << "The A* explored "<< num_nodes_explored << " nodes to find this solution."<<endl;
+        found = true;
         return num_moves;
     }
     // Possible nodes
@@ -88,14 +102,14 @@ int MisplacedTiles(int f, int num_moves, int last_direction)
     if(check_legal_move(UP) && last_direction != DOWN)
     {
         possible_puzzle[UP] = expand_node(UP);
-        if(!check_db(possible_puzzle[UP]))
+        if(check_db(possible_puzzle[UP]) == false)
         {
-            problem = false;
+            num_nodes_explored++;
             fscore[UP] = compare_puzzles(possible_puzzle[UP]);// + num_moves;
             if(debug)
             {
-                cout<< "fscore up: "<<fscore[UP]<< endl;
-                print_puzzle(possible_puzzle[UP]);
+                if(debug) cout<< "fscore up: "<<fscore[UP]<< endl;
+                //print_puzzle(possible_puzzle[UP]);
             }
         } 
     }
@@ -103,14 +117,14 @@ int MisplacedTiles(int f, int num_moves, int last_direction)
     if(check_legal_move(DOWN) && last_direction != UP)
     {
         possible_puzzle[DOWN] = expand_node(DOWN);
-        if(!check_db(possible_puzzle[DOWN]))
+        if(check_db(possible_puzzle[DOWN])==false)
         {
-            problem = false;
+            num_nodes_explored++;
             fscore[DOWN] = compare_puzzles(possible_puzzle[DOWN]);// + num_moves;
             if(debug)
             {
-                cout<< "fscore down: "<<fscore[DOWN]<< endl;
-                print_puzzle(possible_puzzle[DOWN]);
+                if(debug) cout<< "fscore down: "<<fscore[DOWN]<< endl;
+                //print_puzzle(possible_puzzle[DOWN]);
             }
         }
     }
@@ -119,14 +133,14 @@ int MisplacedTiles(int f, int num_moves, int last_direction)
     {
         possible_puzzle[RIGHT] = expand_node(RIGHT);
         // check db if already visited
-        if(!check_db(possible_puzzle[RIGHT]))
+        if(check_db(possible_puzzle[RIGHT])==false)
         {
-            problem = false;
+            num_nodes_explored++;
             fscore[RIGHT] = compare_puzzles(possible_puzzle[RIGHT]);// + num_moves;
             if(debug)
             {
-                cout<< "fscore right: "<<fscore[RIGHT]<< endl;
-                print_puzzle(possible_puzzle[RIGHT]);
+                if(debug) cout<< "fscore right: "<<fscore[RIGHT]<< endl;
+                //print_puzzle(possible_puzzle[RIGHT]);
             }
         }
     }
@@ -134,31 +148,55 @@ int MisplacedTiles(int f, int num_moves, int last_direction)
     if(check_legal_move(LEFT) && last_direction != RIGHT)
     {
         possible_puzzle[LEFT] = expand_node(LEFT);
-        if(!check_db(possible_puzzle[LEFT]))
+        if(check_db(possible_puzzle[LEFT]) == false)
         {
-            problem = false;
+            num_nodes_explored++;
             fscore[LEFT] = compare_puzzles(possible_puzzle[LEFT]);// + num_moves;
             if(debug)
             {
-                cout<< "fscore left: "<<fscore[LEFT]<< endl;
-                print_puzzle(possible_puzzle[LEFT]);
+                if(debug) cout<< "fscore left: "<<fscore[LEFT]<< endl;
+                //print_puzzle(possible_puzzle[LEFT]);
             }
         }
     }
-    if(problem) return -1;
-    // Find minimum, take that path
-    int min_f = mindex(fscore, 4);
-    if(debug)
-        cout << "Minimum f index is " << min_f << endl <<endl;
-    curr_puzzle = possible_puzzle[min_f];
-    store_puzzle(curr_puzzle);
-    print_choice(min_f);
-    // return MisplacedTiles with updated values
-    return MisplacedTiles(fscore[min_f], num_moves+1, min_f);
+    // Find all minimum, branch down all paths
+    bool min_f[4] = {false, false, false, false};
+    mindex(fscore, min_f, 4);
+    if (debug) print_min_f(min_f);
+    if(min_f[UP] == true && found == false)
+    {
+        curr_puzzle = possible_puzzle[UP];
+        store_puzzle(possible_puzzle[UP]);
+        print_choice(UP);
+        MisplacedTiles(num_moves+1, UP);
+    }
+    if(min_f[DOWN] == true && found == false)
+    {
+        curr_puzzle = possible_puzzle[DOWN];
+        store_puzzle(possible_puzzle[DOWN]);
+        print_choice(DOWN);
+        MisplacedTiles(num_moves+1, DOWN);
+    }
+    if(min_f[RIGHT] == true && found == false)
+    {
+        curr_puzzle = possible_puzzle[RIGHT];
+        store_puzzle(possible_puzzle[RIGHT]);
+        print_choice(RIGHT);
+        MisplacedTiles(num_moves+1, RIGHT);
+    }
+    if(min_f[LEFT] == true && found == false)
+    {
+        curr_puzzle = possible_puzzle[LEFT];
+        store_puzzle(possible_puzzle[LEFT]);
+        print_choice(LEFT);
+        MisplacedTiles(num_moves+1, LEFT);
+    }
+    return 0;
 }
 
 int ManhattanDistance()
 {
+    // probably going to be the same process as MisplacedTiles
     return 0;
 }
 
@@ -222,7 +260,7 @@ vector<int> process_input(string type)
     if(debug)
         cout << "Puzzle input: \n" << puzzle_str << endl;
 
-    for(string::size_type i = 0; i < puzzle_str.size(); i++)
+    for(int i = 0; i < puzzle_str.size(); i++)
     {
         if(!isspace(puzzle_str[i]))
         {
@@ -334,20 +372,18 @@ int find_blank()
     return -1;
 }
 
-// returns index of smallest f value
-int mindex(int f[], int size)
+// returns index of smallest f value and value
+void mindex(int f[], bool min_f[], int size)
 {
-    int min = 999;
-    int mindex = 0;
+    int* _min = min_element(f,f+size);
+    if(debug) cout<<"mindex(): "<< *_min<<endl;
     for (int i = 0; i < size; i++)
     {
-        if(f[i] <= min)
+        if(f[i] <= *_min)
         {
-            mindex = i;
-            min = f[i];
+            min_f[i] = true;
         }
     }
-    return mindex;
 }
 
 void print_choice(int direction)
@@ -369,32 +405,42 @@ void print_choice(int direction)
         default:
             cout << "print_choice(): should not see this..."<<endl;
     }
-    if(debug) print_puzzle(curr_puzzle);
+    print_puzzle(curr_puzzle);
 }
 
 // turns vector<int> -> string and stores it
-void store_puzzle(vector<int> &puzzle)
+void store_puzzle(vector<int> puzzle)
 {
-    stringstream result;
-    copy(puzzle.begin(), puzzle.end(), ostream_iterator<int>(result, " "));
-    string puzzle_str = result.str();
-    //cout << "Stored:\n\t"<< puzzle_str << endl;
-    database.push_back(puzzle_str);
+    
+        stringstream result;
+        copy(puzzle.begin(), puzzle.end(), ostream_iterator<int>(result, " "));
+        string puzzle_str = result.str();
+        if(debug) cout << "Stored current puzzle into db."<<endl;
+        database.push_back(puzzle_str);
 }
 
 // returns true if puzzle was already visited
 bool check_db(vector<int> possible_puzzle)
 {
     stringstream result;
-    //ostream_iterator<int> os(result, " ");
     copy(possible_puzzle.begin(), possible_puzzle.end(), ostream_iterator<int>(result, " "));
     string pos_puzzle_str = result.str();
     for(vector<string>::iterator i = database.begin(); i != database.end(); i++)
     {
         if((*i).compare(pos_puzzle_str)==0)
         {
+            if(debug) cout << "db: '" << (*i) << "', current: '"<< pos_puzzle_str <<"'."<<endl;
             return true;
         }
     }
     return false;
+}
+
+void print_min_f(bool* minf)
+{
+    for(int i = 0; i<4;i++)
+    {
+        cout << "min_f: " << minf[i] << ", ";
+    }
+    cout << endl;
 }
