@@ -13,20 +13,23 @@
 #include <sstream>
 #include <iterator>
 #include <cstdio>
+#include <cstdlib>
 
 using namespace std;
 
+#define MISPLACED 0
+#define MANHATTAN 1
 #define UP 0
 #define DOWN 1
 #define RIGHT 2
 #define LEFT 3
-#define DEBUG_INIT "1 3 4\n8 6 2\n_ 7 5\n"
+#define DEBUG_INIT "3 6 4\n_ 1 2\n8 7 5\n"
 #define DEBUG_GOAL "1 2 3\n8 _ 4\n7 6 5\n"
 
 // Globals
 
 int debug = 0;
-int debug_m = 0;
+int mode;
 int num_nodes_explored = 0;
 bool found = false;
 vector<int> curr_puzzle;
@@ -34,12 +37,13 @@ vector<int> goal_puzzle;
 vector<string> database;
 
 // Functions
-int MisplacedTiles(int num_moves, int last_direction);
-int ManhattanDistance();
+int solve(int num_moves, int last_direction);
+int MisplacedTiles(vector<int> puzzle);
+int ManhattanDistance(vector<int> puzzle);
+//int compare_puzzles();
 
 vector<int> process_input(string type);
 void print_puzzle(vector<int> &puzzle);
-int compare_puzzles(vector<int> puzzle);
 void swap(vector<int> &puzzle,int first, int second);
 bool check_legal_move(int direction);
 vector<int> expand_node(int direction);
@@ -68,27 +72,31 @@ int main()
     {
         case 'a':
             {
-                int num_misplaced = compare_puzzles(curr_puzzle);
-                if(debug) cout << "DEBUG: There are " << num_misplaced << " tiles misplaced."<<endl;
-                int status = MisplacedTiles(0, -1);
+                if(debug) 
+                {
+                    int num_misplaced = MisplacedTiles(curr_puzzle);
+                    cout << "DEBUG: There are " << num_misplaced << " tiles misplaced."<<endl;
+                }
+                mode = MISPLACED;
             }
             break;
         case 'b':
             {
-                ManhattanDistance();
+                mode = MANHATTAN;
             }
             break;
         default:
             cout << "That is not a valid command, goodbye."<<endl;
     }
+    solve(0, -1);
     return 0;
 }
 
-// Solve by using misplaced tiles heuristic
-int MisplacedTiles(int num_moves, int last_direction)
+// solves given 8puzzle with input heuristic
+int solve(int num_moves, int last_direction)
 {
     if(debug) cout << "\tMove #" << num_moves<<endl;
-    if(compare_puzzles(curr_puzzle) == 0)
+    if((mode == MISPLACED && MisplacedTiles(curr_puzzle) == 0) || (mode == MANHATTAN && ManhattanDistance(curr_puzzle) == 0))
     {
         cout << "\nGiven the selected heuristic, the solution required " << num_moves << " moves."<<endl;
         cout << "The A* explored "<< num_nodes_explored << " nodes to find this solution."<<endl;
@@ -102,10 +110,19 @@ int MisplacedTiles(int num_moves, int last_direction)
     if(check_legal_move(UP) && last_direction != DOWN)
     {
         possible_puzzle[UP] = expand_node(UP);
+        // Check db if already visited
         if(check_db(possible_puzzle[UP]) == false)
         {
             num_nodes_explored++;
-            fscore[UP] = compare_puzzles(possible_puzzle[UP]);// + num_moves;
+            if(mode == MISPLACED)
+            {
+                fscore[UP] = MisplacedTiles(possible_puzzle[UP]);// + num_moves;
+            }
+            else if(mode == MANHATTAN)
+            {
+                fscore[UP] = ManhattanDistance(possible_puzzle[UP]);// + num_moves;
+            }
+
             if(debug)
             {
                 if(debug) cout<< "fscore up: "<<fscore[UP]<< endl;
@@ -120,7 +137,15 @@ int MisplacedTiles(int num_moves, int last_direction)
         if(check_db(possible_puzzle[DOWN])==false)
         {
             num_nodes_explored++;
-            fscore[DOWN] = compare_puzzles(possible_puzzle[DOWN]);// + num_moves;
+            if(mode == MISPLACED)
+            {
+                fscore[DOWN] = MisplacedTiles(possible_puzzle[DOWN]);// + num_moves;
+            }
+            else if(mode == MANHATTAN)
+            {
+                fscore[DOWN] = ManhattanDistance(possible_puzzle[DOWN]);// + num_moves;
+            }
+            
             if(debug)
             {
                 if(debug) cout<< "fscore down: "<<fscore[DOWN]<< endl;
@@ -136,7 +161,15 @@ int MisplacedTiles(int num_moves, int last_direction)
         if(check_db(possible_puzzle[RIGHT])==false)
         {
             num_nodes_explored++;
-            fscore[RIGHT] = compare_puzzles(possible_puzzle[RIGHT]);// + num_moves;
+            if(mode == MISPLACED)
+            {
+                fscore[RIGHT] = MisplacedTiles(possible_puzzle[RIGHT]);// + num_moves;
+            }
+            else if(mode == MANHATTAN)
+            {
+                fscore[RIGHT] = ManhattanDistance(possible_puzzle[RIGHT]);// + num_moves;
+            }
+
             if(debug)
             {
                 if(debug) cout<< "fscore right: "<<fscore[RIGHT]<< endl;
@@ -151,7 +184,14 @@ int MisplacedTiles(int num_moves, int last_direction)
         if(check_db(possible_puzzle[LEFT]) == false)
         {
             num_nodes_explored++;
-            fscore[LEFT] = compare_puzzles(possible_puzzle[LEFT]);// + num_moves;
+            if(mode == MISPLACED)
+            {
+                fscore[LEFT] = MisplacedTiles(possible_puzzle[LEFT]);// + num_moves;
+            }
+            else if(mode == MANHATTAN)
+            {
+                fscore[LEFT] = ManhattanDistance(possible_puzzle[LEFT]);// + num_moves;
+            }
             if(debug)
             {
                 if(debug) cout<< "fscore left: "<<fscore[LEFT]<< endl;
@@ -168,36 +208,76 @@ int MisplacedTiles(int num_moves, int last_direction)
         curr_puzzle = possible_puzzle[UP];
         store_puzzle(possible_puzzle[UP]);
         print_choice(UP);
-        MisplacedTiles(num_moves+1, UP);
+        solve(num_moves+1, UP);
     }
     if(min_f[DOWN] == true && found == false)
     {
         curr_puzzle = possible_puzzle[DOWN];
         store_puzzle(possible_puzzle[DOWN]);
         print_choice(DOWN);
-        MisplacedTiles(num_moves+1, DOWN);
+        solve(num_moves+1, DOWN);
     }
     if(min_f[RIGHT] == true && found == false)
     {
         curr_puzzle = possible_puzzle[RIGHT];
         store_puzzle(possible_puzzle[RIGHT]);
         print_choice(RIGHT);
-        MisplacedTiles(num_moves+1, RIGHT);
+        solve(num_moves+1, RIGHT);
     }
     if(min_f[LEFT] == true && found == false)
     {
         curr_puzzle = possible_puzzle[LEFT];
         store_puzzle(possible_puzzle[LEFT]);
         print_choice(LEFT);
-        MisplacedTiles(num_moves+1, LEFT);
+        solve(num_moves+1, LEFT);
     }
     return 0;
 }
 
-int ManhattanDistance()
+// Solve by using misplaced tiles heuristic
+int MisplacedTiles(vector<int> puzzle)
 {
-    // probably going to be the same process as MisplacedTiles
-    return 0;
+    int num_misplaced = 0;
+    for(int i = 0; i < 9; i++)
+    {
+        if(puzzle.at(i)!=goal_puzzle.at(i))
+            num_misplaced++;
+    }
+    return num_misplaced;
+}
+
+int ManhattanDistance(vector<int> puzzle)
+{
+    int distance = 0, i = 0, j = 0;
+    for(i = 0; i < goal_puzzle.size(); i++)
+    {
+        for(j = 0; j < puzzle.size(); j++)
+        {
+            if(goal_puzzle.at(i) == puzzle.at(j))
+            {
+                break;
+            }
+        }
+        int difference = abs(i-j);
+        if(difference >= 6)
+        {
+            difference = 2 + (difference - 6);
+            distance += difference;
+        }
+        else if (difference >= 3)
+        {
+            difference = 1 + (difference - 3); 
+            distance += difference;
+        }
+        else
+        {
+            distance += difference;
+        }
+        
+        if(debug) cout << difference << " + ";
+    }
+    if (debug) cout << " = " << distance << endl;
+    return distance;
 }
 
 vector<int> process_input(string type)
@@ -292,18 +372,6 @@ void print_puzzle(vector<int> &puzzle)
             count = 0;
         }
     }
-}
-
-// Helper func to return number of misplaced tiles
-int compare_puzzles(vector<int> puzzle)
-{
-    int num_misplaced = 0;
-    for(int i = 0; i < 9; i++)
-    {
-        if(puzzle.at(i)!=goal_puzzle.at(i))
-            num_misplaced++;
-    }
-    return num_misplaced;
 }
 
 void swap(vector<int>& puzzle,int first, int second)
